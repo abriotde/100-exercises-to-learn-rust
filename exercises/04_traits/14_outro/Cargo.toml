@@ -2,3 +2,12 @@
 name = "outro_03"
 version = "0.1.0"
 edition = "2021"
+
+[profile.test]
+overflow-checks = false
+
+[profile.dev]
+overflow-checks = false
+
+[profile.release]
+overflow-checks = false
