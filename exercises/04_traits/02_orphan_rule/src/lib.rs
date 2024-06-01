@@ -5,7 +5,7 @@
 //  Then delete the code below and move on to the next exercise.
 
 impl PartialEq for u32 {
-    fn eq(&self, _other: &Self) -> bool {
-        todo!()
-    }
+	fn eq(&self, _other: &Self) -> bool {
+		self==_other
+	}
 }
