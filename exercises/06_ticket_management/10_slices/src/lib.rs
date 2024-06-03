@@ -1,9 +1,19 @@
 // TODO: Define a function named `sum` that takes a reference to a slice of `u32` and returns the sum of all
 //  elements in the slice.
 
+fn sum(v:&[u64]) -> u64
+{
+	let mut sum:u64 = 0;
+	for n in v {
+		sum += n
+	}
+	sum
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
 
     #[test]
     fn empty() {
