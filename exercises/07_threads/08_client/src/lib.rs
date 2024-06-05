@@ -7,26 +7,11 @@ pub mod store;
 
 #[derive(Clone)]
 // TODO: flesh out the client implementation.
-pub struct TicketStoreClient {}
-
-impl TicketStoreClient {
-    // Feel free to panic on all errors, for simplicity.
-    pub fn insert(&self, draft: TicketDraft) -> TicketId {
-        todo!()
-    }
-
-    pub fn get(&self, id: TicketId) -> Option<Ticket> {
-        todo!()
-    }
+pub struct TicketStoreClient {
+    sender: Sender<Command>
 }
-
-pub fn launch() -> TicketStoreClient {
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || server(receiver));
-    todo!()
-}
-
 // No longer public! This becomes an internal detail of the library now.
+#[derive(Clone)]
 enum Command {
     Insert {
         draft: TicketDraft,
@@ -38,7 +23,58 @@ enum Command {
     },
 }
 
-pub fn server(receiver: Receiver<Command>) {
+impl TicketStoreClient {
+    // Feel free to panic on all errors, for simplicity.
+    pub fn insert(&self, draft: TicketDraft) -> TicketId {
+        let (response_sender, response_receiver) = std::sync::mpsc::channel();
+        let command = Command::Insert{
+            draft: draft.clone(),
+           response_channel:  response_sender
+        };
+        self.sender
+            .send(command)
+            // If the thread is no longer running, this will panic
+            // because the channel will be closed.
+            .expect("Did you actually spawn a thread? The channel is closed!");
+
+        let ticket_id: TicketId = response_receiver
+            .recv().expect("No response received!");
+        ticket_id
+    }
+
+    pub fn get(&self, id: TicketId) -> Option<Ticket> {
+        let (response_sender, response_receiver) = std::sync::mpsc::channel();
+        let command = Command::Get{
+            id: id,
+            response_channel: response_sender
+    };
+        self.sender
+            .send(command)
+            .expect("Did you actually spawn a thread? The channel is closed!");
+    
+        match response_receiver.recv() {
+            Ok(ticket) => {
+                Some(ticket?)
+            },
+            Err(_) => {
+                None
+            }
+        }
+        
+    }
+    pub fn new() -> TicketStoreClient {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || server(receiver));
+        TicketStoreClient{sender: sender}
+    }
+}
+
+pub fn launch() -> TicketStoreClient {
+    TicketStoreClient::new()
+}
+
+
+fn server(receiver: Receiver<Command>) {
     let mut store = TicketStore::new();
     loop {
         match receiver.recv() {

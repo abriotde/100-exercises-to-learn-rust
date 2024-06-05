@@ -1,10 +1,12 @@
 use std::sync::mpsc::{Receiver, Sender};
+use crate::store::TicketId;
 
 pub mod data;
 pub mod store;
 
 pub enum Command {
-    Insert(todo!()),
+    Insert(data::TicketDraft),
+    Get(TicketId)
 }
 
 // Start the system by spawning the server the thread.
@@ -20,4 +22,17 @@ pub fn launch() -> Sender<Command> {
 //  Enter a loop: wait for a command to show up in
 //  the channel, then execute it, then start waiting
 //  for the next command.
-pub fn server(receiver: Receiver<Command>) {}
+pub fn server(receiver: Receiver<Command>) {
+    loop {
+        println!("Insreceiv comand");
+        let command = receiver.recv().unwrap();
+        match command {
+            Command::Insert(t) => {
+                println!("Insert ticket {:?}", t);
+            }
+            Command::Get(id) => {
+                println!("Get ticket {:?}", id);
+            }
+        }
+    }
+}

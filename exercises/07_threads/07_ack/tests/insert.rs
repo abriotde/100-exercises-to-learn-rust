@@ -12,10 +12,10 @@ fn insert_works() {
         title: ticket_title(),
         description: ticket_description(),
     };
-    let command = Command::Insert {
-        draft: draft.clone(),
-        response_sender,
-    };
+    let command = Command::Insert(
+        draft.clone(),
+        response_sender
+    );
 
     sender
         .send(command)
@@ -26,10 +26,10 @@ fn insert_works() {
     let ticket_id: TicketId = response_receiver.recv().expect("No response received!");
 
     let (response_sender, response_receiver) = std::sync::mpsc::channel();
-    let command = Command::Get {
-        id: ticket_id,
-        response_sender,
-    };
+    let command = Command::Get(
+        ticket_id,
+        response_sender
+    );
     sender
         .send(command)
         .expect("Did you actually spawn a thread? The channel is closed!");

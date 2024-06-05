@@ -14,8 +14,31 @@
 // this is necessary in the next exercise.
 use std::thread;
 
+pub fn sub_sum(v: Vec<i32>) -> i32 {
+	let mut sum = 0;
+	for i in v {
+		sum += i
+	}
+	sum
+}
 pub fn sum(v: Vec<i32>) -> i32 {
-    todo!()
+	let len = v.len();
+	if len>2 {
+		let middle = len/2;
+		let v1 = v[0..middle].to_vec();
+		let v2 = v[middle..].to_vec();
+		let handle1 = thread::spawn(|| {
+			sub_sum(v1)
+		});
+		let handle2 = thread::spawn(|| {
+			sub_sum(v2)
+		});
+		let sum1 = handle1.join().unwrap();
+		let sum2 = handle2.join().unwrap();
+		sum1 + sum2
+	} else {
+		sub_sum(v)
+	}
 }
 
 #[cfg(test)]
