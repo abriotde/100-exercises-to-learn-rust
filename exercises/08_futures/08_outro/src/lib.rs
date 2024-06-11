@@ -8,3 +8,12 @@
 //
 // Use Rust's package registry, crates.io, to find the dependencies you need
 // (if any) to build this system.
+use crate::server::run_server;
+// use actix_web::{HttpServer, App};
+pub mod data;
+pub mod store;
+pub mod server;
+
+pub fn  main() {
+    run_server();
+}
