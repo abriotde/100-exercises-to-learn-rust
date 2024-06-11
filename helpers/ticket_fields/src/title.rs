@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TicketTitle(String);
@@ -9,6 +10,12 @@ pub enum TicketTitleError {
     Empty,
     #[error("The title cannot be longer than 50 bytes")]
     TooLong,
+}
+
+impl fmt::Display for TicketTitle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 impl TryFrom<String> for TicketTitle {

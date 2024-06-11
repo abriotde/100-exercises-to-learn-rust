@@ -3,14 +3,39 @@
 //  the `Display` representation of the `reply` argument as a response.
 use std::fmt::Display;
 use tokio::io::AsyncWriteExt;
+use tokio::task::JoinError;
 use tokio::net::TcpListener;
+use std::sync::Arc;
 
-pub async fn fixed_reply<T>(first: TcpListener, second: TcpListener, reply: T)
+pub async fn echo<T>(listener: TcpListener, reply: Arc<T>) -> Result<(), anyhow::Error>
+where
+    // `T` cannot be cloned. How do you share it between the two server tasks?
+    T: Display + Send + Sync + 'static, {
+    // let mut buf = Vec::with_capacity(256);
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        let (_, mut writer) = stream.split();
+        writer.write(format!("{}", reply).as_bytes())
+            .await.unwrap();
+    }
+}
+
+pub async fn fixed_reply<T>(first: TcpListener, second: TcpListener, reply: T) -> Result<(), JoinError> 
 where
     // `T` cannot be cloned. How do you share it between the two server tasks?
     T: Display + Send + Sync + 'static,
 {
-    todo!()
+    let shared_val = Arc::new(reply);
+    let res1 = tokio::spawn(echo(first, shared_val.clone()));
+    let res2 = tokio::spawn(echo(second, shared_val));
+    let mut ret_val = Ok(());
+    if let Err(e) = res1.await {
+        ret_val = Err(e);
+    }
+    if let Err(e) = res2.await {
+        ret_val = Err(e);
+    }
+    ret_val
 }
 
 #[cfg(test)]

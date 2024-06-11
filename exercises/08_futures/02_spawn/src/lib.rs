@@ -1,10 +1,35 @@
 use tokio::net::TcpListener;
+use tokio::task::JoinError;
+
+
+pub async fn echo(listener: TcpListener) -> Result<(), anyhow::Error> {
+    // let mut buf = Vec::with_capacity(256);
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        let (mut reader, mut writer) = stream.split();
+        tokio::io::copy(&mut reader, &mut writer).await?;
+        // let n = reader.try_read(&mut buf).unwrap();
+        // println!("> {}", String::from_utf8(buf.clone()).unwrap());
+        // println!("> nb={}", n);
+        // let _ = writer.try_write(&buf).unwrap();
+    }
+}
+
 
 // TODO: write an echo server that accepts TCP connections on two listeners, concurrently.
 //  Multiple connections (on the same listeners) should be processed concurrently.
 //  The received data should be echoed back to the client.
-pub async fn echoes(first: TcpListener, second: TcpListener) -> Result<(), anyhow::Error> {
-    todo!()
+pub async fn echoes(first: TcpListener, second: TcpListener) -> Result<(), JoinError> {
+    let res1 = tokio::spawn(echo(first));
+    let res2 = tokio::spawn(echo(second));
+    let mut ret_val = Ok(());
+    if let Err(e) = res1.await {
+        ret_val = Err(e);
+    }
+    if let Err(e) = res2.await {
+        ret_val = Err(e);
+    }
+    ret_val
 }
 
 #[cfg(test)]
