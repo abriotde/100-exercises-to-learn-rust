@@ -5,6 +5,6 @@ pub use async_attributes::{main, test};
 
 #[tokio::main]
 async fn  main()  -> std::io::Result<()> {
-    server::run_server().await;
+    server::run_server2().await;
     Ok(())
 }

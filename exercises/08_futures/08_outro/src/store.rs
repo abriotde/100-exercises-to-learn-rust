@@ -1,9 +1,7 @@
-use crate::data::{Status, Ticket, TicketDraft};
+use crate::data::{Status, Ticket, TicketDraft, TicketId};
 use std::collections::BTreeMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TicketId(u64);
 /* use actix_web::{HttpServer, HttpResponse};
 use actix_web::web::{Path};
 */
@@ -11,33 +9,40 @@ use actix_web::web::{Path};
 // use ticket_fields::TicketDescription;
 #[derive(Clone)]
 pub struct TicketStore {
-    tickets: BTreeMap<TicketId, Arc<RwLock<Ticket>>>,
-    counter: u64,
+    tickets: Arc<RwLock<BTreeMap<TicketId, Arc<RwLock<Ticket>>>>>,
+    counter: Arc<Mutex<u64>>,
 }
 
 impl TicketStore {
     pub fn new() -> Self {
         Self {
-            tickets: BTreeMap::new(),
-            counter: 0,
+            tickets: Arc::new(RwLock::new(BTreeMap::new())),
+            counter: Arc::new(Mutex::new(0)),
         }
     }
 
-    pub fn add_ticket(&mut self, ticket: TicketDraft) -> TicketId {
-        let id = TicketId(self.counter);
-        self.counter += 1;
-        let ticket = Ticket {
-            id,
-            title: ticket.title,
-            description: ticket.description,
-            status: Status::ToDo,
-        };
-        let ticket = Arc::new(RwLock::new(ticket));
-        self.tickets.insert(id, ticket);
-        id
+    pub fn add_ticket(&self, ticket: TicketDraft) -> TicketId {
+        let mut lock = self.counter.try_lock();
+        if let Ok(ref mut max_id) = lock {
+            **max_id += 1;
+            let id = TicketId::from(**max_id);
+            let ticket = Ticket {
+                id,
+                title: ticket.title,
+                description: ticket.description,
+                status: Status::ToDo,
+            };
+            let ticket = Arc::new(RwLock::new(ticket));
+            self.tickets.write().unwrap()
+                .insert(id, ticket);
+            id
+        } else {
+            TicketId::from(0)
+        }
     }
     pub fn get(&self, id: TicketId) -> Option<Arc<RwLock<Ticket>>> {
-        self.tickets.get(&id).cloned()
+        self.tickets.read().unwrap()
+            .get(&id).cloned()
     }
 }
 /*

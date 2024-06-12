@@ -1,5 +1,6 @@
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TicketDescription(String);
+use std::fmt;
 // use serde::{Serialize, Deserialize};
 
 #[derive(Debug, thiserror::Error)]
@@ -8,6 +9,11 @@ pub enum TicketDescriptionError {
     Empty,
     #[error("The description cannot be longer than 500 bytes")]
     TooLong,
+}
+impl fmt::Display for TicketDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 impl TryFrom<String> for TicketDescription {
