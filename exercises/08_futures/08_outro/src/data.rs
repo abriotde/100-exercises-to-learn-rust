@@ -64,11 +64,3 @@ impl fmt::Display for Status {
         fmt::Debug::fmt(self, f)
     }
 }
-
-/*
-
-http://127.0.0.1:8085/get?id=1
-
-http://127.0.0.1:8085/add?draft={%22title%22:%22alberic%22,%20%22description%22:%22de%20la%20Crochais%22}
-
-*/

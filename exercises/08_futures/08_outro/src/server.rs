@@ -1,12 +1,12 @@
-use crate::data::{TicketId, TicketJson};
-use crate::store::TicketStore;
 
+use std::time::SystemTime;
 use std::collections::HashMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::future::Future;
 use http_body_util::Full;
+use std::io::{Error, ErrorKind};
 
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
@@ -18,9 +18,10 @@ use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper::{body::Incoming as IncomingBody, Request, Response, Method, StatusCode};
 
+use crate::data::{TicketId, TicketJson, TicketDraft};
+use crate::store::TicketStore;
+use ticket_fields::{TicketDescription, TicketTitle};
 
-
-static MISSING: &[u8] = b"Missing field";
 
 // ____ Run server using only tokio API ____
 
@@ -71,6 +72,9 @@ impl Service<Request<IncomingBody>> for TicketStore {
         fn send_response(s: Response<Full<Bytes>>) -> Result<Response<Full<Bytes>>, hyper::Error> {
             Ok(s)
         }
+        fn stop_response() -> Result<Response<Full<Bytes>>, Error> {
+            Err(Error::new(ErrorKind::Other, "STOP"))
+        }
         fn full<T: Into<Bytes>>(chunk: T) -> Full<Bytes> {
             Full::new(chunk.into())
         }
@@ -78,38 +82,42 @@ impl Service<Request<IncomingBody>> for TicketStore {
         // let body = req.body();
         let mut ticket_id: Option<u64> = None;
         let mut ticket: Option<TicketJson> = None;
+        let mut title: Option<String> = None;
+        let mut description = "".to_string();
         match req.method() {
             &Method::GET =>  {
-                let query = if let Some(q) = req.uri().query() {
-                    q
-                } else {
-                    let res = Response::builder()
-                        .status(StatusCode::UNPROCESSABLE_ENTITY)
-                        .body(full(MISSING))
-                        .unwrap();
-                    return Box::pin(async { send_response(res) });
-                };
-                let params = form_urlencoded::parse(query.as_bytes())
-                    .into_owned()
-                    .collect::<HashMap<String, String>>();
-                if let Some(id) = params.get("id") {
-                    if let Ok(i) = id.parse::<u64>() {
-                        println!("ticket_id = {}", i);
-                        ticket_id = Some(i)
-                    }
-                };
-                if let Some(json) = params.get("draft") {
-                    println!("ticket = {}", json);
-                    let ticket_res: serde_json::Result<TicketJson> = serde_json::from_str(json);
-                    match ticket_res {
-                        Ok(draft) => {
-                            ticket = Some(draft)
-                        },
-                        Err(e) => {
-                            println!("Fail parse to JSON ticket : {}", e)
+                if let Some(q) = req.uri().query() {
+                    let query = q;
+                    let params = form_urlencoded::parse(query.as_bytes())
+                        .into_owned()
+                        .collect::<HashMap<String, String>>();
+                    if let Some(id) = params.get("id") {
+                        if let Ok(i) = id.parse::<u64>() {
+                            println!("ticket_id = {}", i);
+                            ticket_id = Some(i);
                         }
-                    }
-                };
+                    };
+                    if let Some(t) = params.get("title") {
+                        println!("title = {}", t);
+                        title = Some(t.to_string());
+                    };
+                    if let Some(descr) = params.get("description") {
+                        println!("description = {}", descr);
+                        description = descr.to_string();
+                    };
+                    if let Some(json) = params.get("ticket") {
+                        println!("ticket = {}", json);
+                        let ticket_res: serde_json::Result<TicketJson> = serde_json::from_str(json);
+                        match ticket_res {
+                            Ok(draft) => {
+                                ticket = Some(draft)
+                            },
+                            Err(e) => {
+                                println!("Fail parse to JSON ticket : {}", e)
+                            }
+                        }
+                    };
+                }
             }
             &Method::POST =>  {
                 // let mut files = multipart::server::Multipart::from(req);
@@ -145,9 +153,14 @@ impl Service<Request<IncomingBody>> for TicketStore {
                 }
             }
             "/add" => {
-                match ticket {
+                match title {
                     Some(t) => {
-                        let draft = t.draft();
+                        let title = TicketTitle::try_from(t).unwrap();
+                        let description = TicketDescription::try_from(description).unwrap();
+                        let draft = TicketDraft{
+                            title: title,
+                            description: description,
+                        };
                         let id = self.add_ticket(draft);
                         format!("{{id:\"{}\"}}", id)
                     }
@@ -155,6 +168,10 @@ impl Service<Request<IncomingBody>> for TicketStore {
                         "{error:\"Missing parameter 'draft'.\"}".to_string()
                     }
                  }
+            },
+            "/stop" => {
+                // return Box::pin(async { stop_response() });
+                "STOP".into()
             },
             _ => "404 Error".into(),
         };
@@ -164,11 +181,13 @@ impl Service<Request<IncomingBody>> for TicketStore {
 /**
     Run server using Hyper API
 */
-pub async fn run_server2() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_server2(timeout:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8085));
     let listener = TcpListener::bind(addr).await?;
     let store = TicketStore::new();
+    let start = SystemTime::now();
     loop {
+        println!("next loop");
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
         let store_clone = store.clone();
@@ -180,5 +199,14 @@ pub async fn run_server2() -> Result<(), Box<dyn std::error::Error + Send + Sync
                 eprintln!("Error serving connection: {:?}", err);
             }
         });
+        if timeout>0 {
+            println!("Timeout : {}", timeout);
+            let duration = SystemTime::now().duration_since(start).unwrap();
+            println!("Timeout : {} VS {}", timeout, duration.as_secs());
+            if duration.as_secs()>timeout {
+                println!("Time to quit : {}", timeout);
+                return Err(Box::new(Error::new(ErrorKind::Other, "Timeout")));
+            }
+        }
     }
 }
